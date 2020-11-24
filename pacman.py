@@ -20,7 +20,7 @@ class Vector:
         return self.x, self.y
 
     def __hash__(self):
-        return id(Vector)
+        return id(self)
 
     def copy(self):
         return Vector(self.x, self.y)
@@ -30,6 +30,11 @@ class Vector:
 
     def __sub__(self, other):
         return Vector(self.x - other.x, self.y - other.y)
+
+    def __eq__(self, other):
+        if self.x == other.x and self.y == other.y:
+            return True
+        return False
 
 
 # Directions
@@ -55,7 +60,7 @@ class Pacman:
         self.name = 'pacman'
         self.x = 100
         self.y = 100
-        self.node = gridsystem.nodeList[0]
+        self.node = gridsystem.nodeList[-3]
         self.position = self.node.position.copy()
         self.lives = 3
         self.speed = 60
@@ -74,50 +79,41 @@ class Pacman:
                     self.direction = self.next_direction
                 self.node = self.target
                 self.position = self.node.position.copy()
+                if self.node.type == 'portal':
+                    self.node = self.node.pair
+                    self.position = self.node.position.copy()
             else:
-                if self.next_direction.asTuple() == (self.direction*(-1)).asTuple():
+                if self.next_direction.asTuple() == (self.direction * (-1)).asTuple():
                     self.direction = self.next_direction
                     cash = self.node
                     self.node = self.target
                     self.target = cash
-                # self.node = neighbours[self.direction]
-                # self.position = neighbours[self.direction].position
+
 
     def set_direction(self, key):
         if self.target_reached():
             self.next_direction = STOP
-            neighbours = self.node.neighbours
-            for direction in neighbours:
-                if neighbours[direction]:
-                    if key == pg.K_UP and direction == UP:
-                        self.direction = UP
-                    elif key == pg.K_DOWN and direction == DOWN:
-                        self.direction = DOWN
-                    elif key == pg.K_LEFT and direction == LEFT:
-                        self.direction = LEFT
-                    elif key == pg.K_RIGHT and direction == RIGHT:
-                        self.direction = RIGHT
+            new_direction = self.find_direction(self.node, key)
+            if new_direction:
+                self.direction = new_direction
         else:
-            neighbours = self.target.neighbours
-            for direction in neighbours:
-                if neighbours[direction]:
-                    if key == pg.K_UP and direction == UP:
-                        self.next_direction = UP
-                    elif key == pg.K_DOWN and direction == DOWN:
-                        self.next_direction = DOWN
-                    elif key == pg.K_LEFT and direction == LEFT:
-                        self.next_direction = LEFT
-                    elif key == pg.K_RIGHT and direction == RIGHT:
-                        self.next_direction = RIGHT
-        '''key_dict = {
-                    (pg.K_UP, UP): UP,
-                    (pg.K_DOWN, DOWN): DOWN,
-                    (pg.K_LEFT, LEFT): LEFT,
-                    (pg.K_RIGHT, RIGHT): RIGHT
-                }
+            new_direction = self.find_direction(self.target, key)
+            if new_direction:
+                self.next_direction = new_direction
+
+    @staticmethod
+    def find_direction(node, key):
+        key_dict = {
+            (pg.K_UP, UP): UP,
+            (pg.K_DOWN, DOWN): DOWN,
+            (pg.K_LEFT, LEFT): LEFT,
+            (pg.K_RIGHT, RIGHT): RIGHT
+        }
+        neighbours = node.neighbours
         for direction in neighbours.keys():
-            if (key, direction) in key_dict.keys():
-                self.direction = key_dict[(key, direction)]'''
+            if neighbours[direction]:
+                if (key, direction) in key_dict.keys():
+                    return key_dict[(key, direction)]
 
     def target_reached(self):
         if self.target is not None:
@@ -158,8 +154,15 @@ class Pacman:
 class Node:
 
     def __init__(self, grid_x, grid_y):
+        self.g_x = grid_x
+        self.g_y = grid_y
         self.position = Vector(grid_x * BOTSIZE[0], grid_y * BOTSIZE[1])
         self.neighbours = {UP: None, DOWN: None, LEFT: None, RIGHT: None}
+        self.type = 'regular'
+        self.pair = None
+
+    def __str__(self):
+        return f'<Node({self.g_x},{self.g_y})>'
 
     def set_neighbour(self, neighbour, direction):
         self.neighbours[direction] = neighbour
@@ -172,15 +175,69 @@ class Node:
                 pg.draw.line(screen, WHITE, self.position.asTuple(),
                              neighbours[direction].position.asTuple(), 2)
 
+    def __hash__(self):
+        return id(self)
+
+    def __eq__(self, other):
+        if self.g_x == other.g_x and self.g_y == other.g_y:
+            return True
+        return False
+
 
 class NodeGroup:
 
     def __init__(self):
         self.nodeList = []
 
-    def createGroup(self, *nodes):
-        for node in nodes:
-            self.nodeList.append(node)
+    def __str__(self):
+        return f'{[node.__str__() for node in self.nodeList]}'
+
+    def createGroup(self):  # , *nodes):
+        '''for node in nodes:
+            self.nodeList.append(node)'''
+
+        with open('maze1.txt', 'r') as file:
+            maze = file.readlines()
+            portal_list = []
+            for i in range(len(maze)):
+                for j in range(len(maze[i])):
+                    if maze[i][j] == '+' or maze[i][j] == '1':
+                        node = Node(j + 1, i + 1)
+                        self.nodeList.append(node)
+                    if maze[i][j] == '1':
+                        node.type = 'portal'
+                        portal_list.append(node)
+
+            portal_list[0].pair = portal_list[1]
+            portal_list[1].pair = portal_list[0]
+
+            for node in self.nodeList:
+                g_x = node.g_x
+                g_y = node.g_y
+                i = g_y - 1
+                j = g_x - 1
+                if (i + 1) < len(maze) and (j + 2) < len(maze[i]):
+                    if maze[i][j + 2] == '-':
+                        ind = maze[i].find('+', j + 1)
+                        if ind == -1:
+                            ind = maze[i].find('1', j + 1)
+                        if ind != -1:
+                            neighbour_r = Node(ind + 1, i + 1)
+                            i_elem = self.nodeList.index(neighbour_r)
+                            node.set_neighbour(self.nodeList[i_elem], RIGHT)
+                            self.nodeList[i_elem].set_neighbour(node, LEFT)
+                    if maze[i + 1][j] == '|':
+                        string = ''
+                        for k in range(len(maze)):
+                            string += maze[k][j]
+                        ind = string.find('+', i + 1)
+                        if ind == -1:
+                            ind = string.find('1', i + 1)
+                        if ind != -1:
+                            neighbour_d = Node(j + 1, ind + 1)
+                            i_elem = self.nodeList.index(neighbour_d)
+                            node.set_neighbour(self.nodeList[i_elem], DOWN)
+                            self.nodeList[i_elem].set_neighbour(node, UP)
 
     def render(self, screen):
         for node in self.nodeList:
@@ -192,47 +249,25 @@ def main():
     game_over = False
 
     # Initializing the screen
-    SIZE = (500, 500)
+    SIZE = (600, 500)
     screen = pg.display.set_mode(SIZE)
     # background = pg.Surface(SIZE)
     # screen.blit(background, (0, 0))
 
     # Creating the Grid of Nodes
-    node1 = Node(3, 3)
-    node2 = Node(13, 3)
-    node3 = Node(23, 3)
-    node4 = Node(3, 13)
-    node5 = Node(13, 13)
-    node6 = Node(23, 13)
-    node7 = Node(13, 23)
-    node8 = Node(23, 23)
-    node1.set_neighbour(node2, RIGHT)
-    node1.set_neighbour(node4, DOWN)
-    node2.set_neighbour(node1, LEFT)
-    node2.set_neighbour(node3, RIGHT)
-    node3.set_neighbour(node2, LEFT)
-    node3.set_neighbour(node6, DOWN)
-    node4.set_neighbour(node1, UP)
-    node4.set_neighbour(node5, RIGHT)
-    node5.set_neighbour(node4, LEFT)
-    node5.set_neighbour(node6, RIGHT)
-    node5.set_neighbour(node7, DOWN)
-    node6.set_neighbour(node3, UP)
-    node6.set_neighbour(node5, LEFT)
-    node6.set_neighbour(node8, DOWN)
-    node7.set_neighbour(node5, UP)
-    node7.set_neighbour(node8, RIGHT)
-    node8.set_neighbour(node6, UP)
-    node8.set_neighbour(node7, LEFT)
     nodes = NodeGroup()
-    nodes.createGroup(node1, node2, node3, node4, node5, node6, node7, node8)
+    nodes.createGroup()
+    # print(node1)
+    # print(Node(3, 3) not in nodes.nodeList)
+    # print(Node(3, 2) in nodes.nodeList)
+    print([i.type for i in nodes.nodeList])
 
     # Creating The Pacman
     pacman = Pacman(nodes)
     # print(pacman.direction)
     # pacman.position = Vector(45.943, 30)
     # pacman.direction = RIGHT
-    print(UP.asTuple() == (DOWN*(-1)).asTuple())
+    # print(UP.asTuple() == (DOWN*(-1)).asTuple())
 
     while not game_over:
         screen.fill(BLACK)
