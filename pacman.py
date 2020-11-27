@@ -68,11 +68,65 @@ class Creature:
         self.position = self.node.position.copy()
         self.speed = 60
         self.direction = STOP
-        self.next_direction = STOP
         self.target = None
         self.radius = 10
         self.color = YELLOW
         self.clock = pg.time.Clock()
+
+    def set_target(self):
+        if self.direction != STOP:
+            self.target = self.node.neighbours[self.direction]
+        else:
+            self.target = None
+
+    def get_valid_directions(self):
+        directions = []
+        neighbours = self.node.neighbours
+        for direction in neighbours.keys():
+            if neighbours[direction] is not None:
+                directions.append(direction)
+        return directions
+
+    def get_valid_targets(self):
+        targets = []
+        directions = self.get_valid_directions()
+        for direction in directions:
+            targets.append(self.node.neighbours[direction])
+        return targets
+
+    def target_reached(self):
+        if self.target is not None:
+            if (self.node.position - self.position).normL2() + (self.position - self.target.position).normL2() > \
+                    (self.node.position - self.target.position).normL2():
+                return True
+            return False
+        return True
+
+    def render(self, screen):
+        pg.draw.circle(screen, self.color, self.position.asInt(), self.radius)
+
+    def create(self):
+        Creature.creatureList.append(self)
+
+    def __eq__(self, other):
+        return self.name == other.name
+
+
+class Pacman(Creature):
+    name = 'pacman'
+
+    def __init__(self, gridsystem):
+        Creature.__init__(self, gridsystem)
+        self.init_node = gridsystem.nodeList[-3]
+        self.node = self.init_node
+        self.position = self.node.position.copy()
+        self.lives = 3
+        self.speed = 60
+        self.direction = STOP
+        self.next_direction = STOP
+        self.score = 0
+        self.target = None
+        self.radius = 10
 
     def move(self):
         dt = self.clock.tick(30) / 1000
@@ -96,54 +150,6 @@ class Creature:
             cash = self.node
             self.node = self.target
             self.target = cash
-
-    def set_target(self):
-        if self.direction != STOP:
-            self.target = self.node.neighbours[self.direction]
-        else:
-            self.target = None
-
-    def target_reached(self):
-        if self.target is not None:
-            if (self.node.position - self.position).normL2() + (self.position - self.target.position).normL2() > \
-                    (self.node.position - self.target.position).normL2():
-                return True
-            return False
-        return True
-
-    def render(self, screen):
-        pg.draw.circle(screen, self.color, self.position.asInt(), self.radius)
-
-    def create(self):
-        Creature.creatureList.append(self)
-
-    def collide_creature(self):
-        for creature in Creature.creatureList:
-            if creature != self:
-                distance = (creature.position-self.position).normL2()
-                if 2*self.radius >= distance >= self.radius:
-                    return True
-        return False
-
-    def __eq__(self, other):
-        return self.name == other.name
-
-
-class Pacman(Creature):
-    name = 'pacman'
-
-    def __init__(self, gridsystem):
-        Creature.__init__(self, gridsystem)
-        self.init_node = gridsystem.nodeList[-3]
-        self.node = self.init_node
-        self.position = self.node.position.copy()
-        self.lives = 3
-        self.speed = 60
-        self.direction = STOP
-        self.next_direction = STOP
-        self.score = 0
-        self.target = None
-        self.radius = 10
 
     def set_direction(self, key):
         if self.target_reached():
@@ -197,8 +203,16 @@ class Pacman(Creature):
             return False
         return True
 
+    def collide_ghost(self):
+        for creature in Creature.creatureList:
+            if creature != self:
+                distance = (creature.position-self.position).normL2()
+                if 1.5*self.radius >= distance >= 0:
+                    return True
+        return False
+
     def check_ghosts(self):
-        if self.collide_creature():
+        if self.collide_ghost():
             self.lives -= 1
             self.node = self.init_node
             self.position = self.node.position.copy()
@@ -252,7 +266,7 @@ class NodeGroup:
             for i in range(len(maze)):
                 for j in range(len(maze[i])):
                     if maze[i][j] == '+' or maze[i][j] == '1':
-                        node = Node(j + 1, i + 1)
+                        node = Node(j, i*2)
                         self.nodeList.append(node)
                     if maze[i][j] == '1':
                         node.type = 'portal'
@@ -264,15 +278,15 @@ class NodeGroup:
             for node in self.nodeList:
                 g_x = node.g_x
                 g_y = node.g_y
-                i = g_y - 1
-                j = g_x - 1
+                i = g_y // 2
+                j = g_x
                 if (i + 1) < len(maze) and (j + 2) < len(maze[i]):
                     if maze[i][j + 2] == '-':
                         ind = maze[i].find('+', j + 1)
                         if ind == -1:
                             ind = maze[i].find('1', j + 1)
                         if ind != -1:
-                            neighbour_r = Node(ind + 1, i + 1)
+                            neighbour_r = Node(ind, i*2)
                             i_elem = self.nodeList.index(neighbour_r)
                             node.set_neighbour(self.nodeList[i_elem], RIGHT)
                             self.nodeList[i_elem].set_neighbour(node, LEFT)
@@ -284,7 +298,7 @@ class NodeGroup:
                         if ind == -1:
                             ind = string.find('1', i + 1)
                         if ind != -1:
-                            neighbour_d = Node(j + 1, ind + 1)
+                            neighbour_d = Node(j, ind*2)
                             i_elem = self.nodeList.index(neighbour_d)
                             node.set_neighbour(self.nodeList[i_elem], DOWN)
                             self.nodeList[i_elem].set_neighbour(node, UP)
@@ -325,9 +339,9 @@ class PelletGroup:
             for i in range(len(maze)):
                 for j in range(len(maze[i])):
                     if maze[i][j] == 'p':
-                        self.pelletList.append(Pellet('small', j + 1, i + 1))
+                        self.pelletList.append(Pellet('small', j, i*2))
                     elif maze[i][j] == 'P':
-                        self.pelletList.append(Pellet('big', j + 1, i + 1))
+                        self.pelletList.append(Pellet('big', j, i*2))
 
     def render(self, screen):
         for pellet in self.pelletList:
@@ -344,20 +358,41 @@ class Ghost(Creature):
         self.init_node = gridsystem.nodeList[node_elem]
         self.node = self.init_node
         self.position = self.node.position.copy()
+        self.goal = gridsystem.nodeList[-3].position
 
     def set_direction(self):
-        dir_dict = {0: UP, 1: DOWN, 2: LEFT, 3: RIGHT}
+        # dir_dict = {0: UP, 1: DOWN, 2: LEFT, 3: RIGHT}
         if self.target_reached():
-            direction = dir_dict[random.randint(0, 3)]
-            if self.node.neighbours[direction] is not None:
-                self.direction = direction
-        else:
-            if self.collide_creature():
-                reverse_dir = {UP: DOWN, DOWN: UP, LEFT: RIGHT, RIGHT: LEFT}
-                self.direction = reverse_dir[self.direction]
-                cash = self.node
+            self.direction = self.best_direction(self.get_valid_directions())
+
+    def best_direction(self, valid_directions):
+        distances = []
+        for direction in valid_directions:
+            distance = self.node.position + direction*BOTSIZE[0] - self.goal
+            distances.append(distance.normL2())
+        i = distances.index(min(distances))
+        return valid_directions[i]
+
+    def set_goal(self, pacman):
+        if self.goal_reached():
+            self.goal = pacman.position.copy()
+
+    def goal_reached(self):
+        if (self.position-self.goal).normL2() <= self.radius:
+            return True
+        return False
+
+    def move(self):
+        dt = self.clock.tick(30) / 1000
+        neighbours = self.node.neighbours
+        if neighbours[self.direction] is not None:
+            self.position += self.direction * self.speed * dt
+            if self.target_reached():
                 self.node = self.target
-                self.target = cash
+                self.position = self.node.position.copy()
+                if self.node.type == 'portal':
+                    self.node = self.node.pair
+                    self.position = self.node.position.copy()
 
 
 def main():
@@ -365,7 +400,7 @@ def main():
     game_over = False
 
     # Initializing the screen
-    SIZE = (600, 500)
+    SIZE = (540, 1000)
     screen = pg.display.set_mode(SIZE)
 
     # Creating the Grid of Nodes
@@ -396,9 +431,11 @@ def main():
             if event.type == pg.KEYDOWN:
                 pacman.set_direction(event.key)
 
+        pinky.set_goal(pacman)
         pinky.set_direction()
         pinky.set_target()
         pinky.move()
+        inky.set_goal(pacman)
         inky.set_direction()
         inky.set_target()
         inky.move()
