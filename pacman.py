@@ -409,7 +409,7 @@ class PelletGroup:
 
     def render(self, screen):
         for pellet in self.pelletList:
-            pellet.render(screen.blit(ball))
+            pellet.render(screen)
 
 
 class Ghost(Creature):
@@ -474,6 +474,9 @@ class Ghost(Creature):
             self.set_target()
 
         self.position += self.direction * self.speed * dt
+
+
+
     
 
 def main():
