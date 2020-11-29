@@ -3,6 +3,31 @@ import math
 import random
 import sys
 
+#Sounds
+pg.init()
+pacman_begin = pg.mixer.Sound('pacman_beginning.wav')
+pacman_death = pg.mixer.Sound('pacman_death.wav')
+pacman_eatfruit = pg.mixer.Sound('pacman_eatfruit.wav')
+pacman_eatghost = pg.mixer.Sound('pacman_eatghost.wav')
+pacman_extrapac = pg.mixer.Sound('pacman_extrapac.wav')
+pacman_intermission = pg.mixer.Sound('pacman_intermission.wav')
+#pacman_ringtone = pg.mixer.Sound('pacman_ringtone.wav')
+#pacman_ringtone_interlude = pg.mixer.Sound('pacman_ringtone_interlude.wav')
+
+#Png
+ball = pg.image.load('ball.png')
+bigball = pg.image.load('bigball.png')
+ghost = pg.image.load('ghost.png')
+pacman_open_up = pg.image.load('pacman_open.png')
+pacman_open_down = pg.transform.flip(pacman_open_up, True, False)
+pacman_open_right = pg.transform.flip(pacman_open_up, True, True)
+pacman_open_left = pg.transform.flip(pacman_open_up, False, False)
+pacman_right = pg.image.load('pacman_right.png')
+pacman_down = pg.transform.flip(pacman_right, True, False)
+pacman_right_up = pg.transform.flip(pacman_right, True, True)
+pacman_left = pg.transform.flip(pacman_right, False, False)
+
+
 
 class Vector:
     def __init__(self, x, y):
@@ -42,6 +67,7 @@ class Vector:
         return int(self.x), int(self.y)
 
 
+
 # Directions
 UP = Vector(0, -1)
 DOWN = Vector(0, 1)
@@ -58,10 +84,13 @@ RED = (255, 0, 0)
 PINK = (255, 192, 203)
 BLUE = (0, 0, 255)
 AMBER = (255, 191, 0)
-
+left = False
+right = False
+walkCount = 0
 # Another constants
 BOTSIZE = (10, 10)
-
+animation_increment=10
+clock_tick_rate=20
 
 class Creature:
     creatureList = []
@@ -120,8 +149,9 @@ class Creature:
 
 
 class Pacman(Creature):
+    pg.mixer.music.load('pacman_chomp.wav')
+    pg.mixer.music.play(-1)
     name = 'pacman'
-
     def __init__(self, gridsystem):
         Creature.__init__(self, gridsystem)
         self.init_node = gridsystem.nodeList[-3]
@@ -138,6 +168,26 @@ class Pacman(Creature):
     def move(self):
         dt = self.clock.tick(30) / 1000
         neighbours = self.node.neighbours
+        #walkRight=[pg.image.load('pacman_open.png'),pg.image.load('pacman_right.png')]
+        #walkLeft=[pg.image.load('pacman_open.png'),pg.image.load('pacman_right.png')]
+        #walkUp=[pg.image.load('pacman_open.png'),pg.image.load('pacman_right.png')]
+        #walkDown=[pg.image.load('pacman_open.png'),pg.image.load('pacman_right.png')]
+        #keys = pygame.key.get_pressed()
+        #if left:  
+        #    win.blit(walkLeft[walkCount//3], (x,y))
+        #    walkCount += 1                          
+        #elif right:
+        #    win.blit(walkRight[walkCount//3], (x,y))
+        #    walkCount += 1
+        #elif up:
+        #   win.blit(walkUp[walkCount//3], (x,y))
+        #    walkCount += 1
+        #elif down:
+        #    win.blit(walkDown[walkCount//3], (x,y))
+        #    walkCount += 1
+        #else:
+        #    win.blit(char, (x, y))
+        #   walkCount = 0
         if neighbours[self.direction] is not None:
             self.position += self.direction * Creature.speed * dt
             if self.target_reached():
@@ -186,6 +236,7 @@ class Pacman(Creature):
         if food.position is not None:
             if self.collide_food(food):
                 self.eat(food)
+    
 
     def collide_food(self, food):
         distance = (self.position - food.position).normL2()
@@ -220,7 +271,11 @@ class Pacman(Creature):
         return False
 
     def check_ghosts(self):
+        
         if self.collide_ghost():
+            pg.mixer.Sound.play(pacman_death)
+            pg.mixer.music.pause()
+            pg.mixer.music.unpause()
             self.lives -= 1
             self.node = self.init_node
             self.position = self.node.position.copy()
@@ -329,6 +384,7 @@ class Pellet:
     def render(self, screen):
         if self.position is not None:
             pg.draw.circle(screen, YELLOW, self.position.asInt(), self.radius)
+        
 
     def disappear(self):
         self.position = None
@@ -353,7 +409,7 @@ class PelletGroup:
 
     def render(self, screen):
         for pellet in self.pelletList:
-            pellet.render(screen)
+            pellet.render(screen.blit(ball))
 
 
 class Ghost(Creature):
@@ -418,7 +474,7 @@ class Ghost(Creature):
             self.set_target()
 
         self.position += self.direction * self.speed * dt
-
+    
 
 def main():
     pg.init()
@@ -453,7 +509,11 @@ def main():
     while not EXIT:
         if not pacman.alive():
             EXIT = True
-
+        #clock = pg.time.Clock()
+        #bg = pg.image.load('background.png').convert()
+        #screen.blit(bg,[0,0])
+        #pg.display.flip()
+        #clock.tick(clock_tick_rate)
         screen.fill(BLACK)
         nodes.render(screen)
         pellets.render(screen)
@@ -489,7 +549,7 @@ def main():
 
 
 while True:
-    more = int(input())
+    more =int(input())
     if more:
         main()
     else:
